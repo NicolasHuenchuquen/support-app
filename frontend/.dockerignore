@@ -1,0 +1,5 @@
+node_modules 
+#node_modules va porque estamos en una maquina windows y no tiene sentido subir esa carpeta al contenedor, ademas de que en el dockerfile se hace npm install y es una carpeta que se crea en el contenedor
+.next
+.git
+*.md
