@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.core.config import settings
 
 app = FastAPI(
     title="Support App API",
@@ -15,11 +16,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get("/")
-def read_root():
-    return {"message": "Backend funcionando con FastAPI"}
-
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    db_info = settings.DATABASE_URL.split("@")[-1]
+    return {"status": "ok", "db_info": db_info}
     

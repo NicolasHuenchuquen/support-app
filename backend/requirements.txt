@@ -6,3 +6,4 @@ python-jose[cryptography]==3.5.0
 passlib[bcrypt]==1.7.4
 alembic==1.18.4
 python-dotenv==1.2.1
+pydantic-settings==2.3.4
