@@ -1,0 +1,26 @@
+# .gitlab-ci.yml (Pipeline de Integración Continua)
+# Este archivo le dice a GitLab qué hacer cada vez que subes código.
+
+# 1. Definimos las etapas (stages) de nuestro pipeline.
+# Por ahora empezamos solo con la etapa de "test".
+stages:
+  - test
+
+# 2. Creamos el trabajo (job) que probará nuestro Backend.
+test_backend:
+  stage: test
+  # Usamos una imagen oficial de Python pura y ligera, 
+  # ya que los Runners de GitLab levantarán esto en un contenedor temporal.
+  image: python:3.12-slim
+  
+  # Este bloque 'before_script' se ejecuta antes del script principal.
+  # Es ideal para instalar dependencias.
+  before_script:
+    - cd backend  # Entramos a la carpeta de tu API
+    # Instalamos las librerías necesarias (ignora warnings de root en docker)
+    - pip install --no-cache-dir -r requirements.txt
+    
+  # Este es el comando real que determina si el Job pasa (verde) o falla (rojo)
+  script:
+    # Corremos el test que acabamos de probar en local
+    - pytest tests/test_main.py -v

@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.routers import user as user_router
+from app.routers import login as login_router
 
 app = FastAPI(
     title="Support App API",
@@ -19,6 +20,7 @@ app.add_middleware(
 
 # Registramos el router que acabamos de crear
 app.include_router(user_router.router)
+app.include_router(login_router.router)
 
 @app.get("/health")
 def health():

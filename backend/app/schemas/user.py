@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, ConfigDict
 from typing import Optional
 
 
@@ -44,7 +44,6 @@ class UserRead(UserBase):
 
     # NO se incluye hashed_password por seguridad
 
-    class Config:
-        # Permite que Pydantic lea directamente un objeto SQLAlchemy (modelo de BD)
-        # Sin esto, solo podría leer diccionarios simples de Python
-        from_attributes = True
+    # Permite que Pydantic lea directamente un objeto SQLAlchemy (modelo de BD)
+    # Sin esto, solo podría leer diccionarios simples de Python
+    model_config = ConfigDict(from_attributes=True)
