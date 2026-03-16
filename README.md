@@ -106,3 +106,5 @@ Navega al frontend (`cd frontend`):
 ---
 
 > **Nota:** Este proyecto evoluciona constantemente priorizando *buenas prácticas, arquitectura de software limpia y mantenibilidad* a largo plazo en su fase iterativa, evitando soluciones "rápidas".
+
+* Proyecto migrado a GitLab con CI/CD activo.
