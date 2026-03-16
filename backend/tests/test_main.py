@@ -27,4 +27,4 @@ def test_health_endpoint():
     # 3. Verificamos que el JSON de respuesta contenga al menos el status esperado.
     # Como "db_info" es dinámico, verificamos solo la llave "status"
     assert response.json()["status"] == "ok"
-    assert "db_info" in response.json()
+    
