@@ -24,5 +24,5 @@ app.include_router(login_router.router)
 
 @app.get("/health")
 def health():
-    db_info = settings.DATABASE_URL.split("@")[-1]
-    return {"status": "ok", "db_info": db_info}
+    """Endpoint de salud simple para monitoreo de Render."""
+    return {"status": "ok"}
