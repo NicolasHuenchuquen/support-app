@@ -28,5 +28,5 @@ test_backend:
     
   # Este es el comando real que determina si el Job pasa (verde) o falla (rojo)
   script:
-    # Corremos el test que acabamos de probar en local
-    - pytest tests/test_main.py -v
+    # Corremos todos los tests de la carpeta "tests"
+    - pytest tests -v
