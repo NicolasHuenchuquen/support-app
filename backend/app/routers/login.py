@@ -1,70 +1,147 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_db
 from app.models.user import User
 from app.core.security import verify_password, create_access_token
 
+# ---------------------------------------------------------------------------
+# Configuración del Rate Limiter
+# ---------------------------------------------------------------------------
+
+# Para endpoints de login/logout usamos IP como clave porque el usuario
+# aún no tiene un JWT con el que identificarlo.
+#
+# IMPORTANTE: Este es el límite más estricto de toda la API.
+# Un atacante que intenta adivinar contraseñas solo tiene 5 intentos por
+# minuto por IP antes de recibir un error HTTP 429 (Too Many Requests).
+_limiter = Limiter(key_func=get_remote_address)
+
 
 # APIRouter agrupa endpoints bajo un prefijo común.
 router = APIRouter(prefix="/login", tags=["Login"])
 
+
 @router.post("/token")
+@_limiter.limit("5/minute")
 def login_for_access_token(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
-    Endpoint para autenticar un usuario y generar un token JWT.
-    
-    FastAPI usa OAuth2PasswordRequestForm. Este formulario espera recibir
-    los datos como 'Form Data' (no JSON) con dos campos obligatorios:
-    - username (en nuestro caso, el frontend enviará el email aquí)
-    - password
+    Autentica un usuario y establece una cookie JWT segura en el navegador.
+
+    FastAPI usa OAuth2PasswordRequestForm que espera los datos como
+    'Form Data' (no JSON) con dos campos: `username` (email) y `password`.
+
+    Rate limit: 5 requests por minuto por IP.
+    Este límite es crítico: previene ataques de fuerza bruta donde un bot
+    intenta miles de combinaciones de contraseñas por segundo.
+
+    Args:
+        request:   Objeto Request de FastAPI (requerido por slowapi para rate limiting).
+        form_data: Datos del formulario OAuth2 (username=email, password).
+                   FastAPI los extrae automáticamente del body del request.
+        db:        Sesión de BD inyectada por `Depends(get_db)`.
+
+    Returns:
+        Response HTTP 200 con una cookie HTTP-only `access_token` configurada.
+        La cookie no es accesible desde JavaScript (protección XSS).
+
+    Raises:
+        HTTPException(401): Si el email no existe o la contraseña es incorrecta.
+                            Deliberadamente no se distingue cuál de los dos falló
+                            para no dar pistas a un atacante.
+        HTTPException(400): Si la cuenta del usuario está desactivada.
+        HTTPException(429): Si se superan los 5 intentos por minuto desde la misma IP.
+
+    Dependencies:
+        - verify_password: Compara la contraseña con el hash bcrypt de la BD.
+        - create_access_token: Genera y firma el JWT con el ID y rol del usuario.
+        - get_db: Provee la sesión de BD.
+
+    Notes:
+        ENFOQUE COOKIE vs LOCALSTORAGE:
+        - localStorage: Más simple, pero vulnerable a ataques XSS (un script
+          malicioso podría leer el token).
+        - Cookie HttpOnly (este enfoque): JavaScript no puede leerla.
+          El navegador la envía automáticamente en cada request al mismo dominio.
     """
-    # 1. Buscar al usuario en la BD por email (que viene en username)
+    # 1. Buscar al usuario en la BD por email (que viene en el campo "username")
     user = db.query(User).filter(User.email == form_data.username).first()
-    
-    # 2. Si no existe o la contraseña no hace match con el hash de la BD
+
+    # 2. Verificar existencia y contraseña en un solo bloque para evitar
+    #    "timing attacks" donde el tiempo de respuesta revela si el email existe.
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Email o contraseña incorrectos",
             headers={"WWW-Authenticate": "Bearer"},
         )
-        
-    # 3. Validar estado de la cuenta
+
+    # 3. Verificar que la cuenta esté activa
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Usuario inactivo"
+            detail="Usuario inactivo",
         )
 
-    # 4. Crear el JWT real con el ID del usuario y su rol
+    # 4. Crear el JWT con el ID del usuario y su rol como payload
     access_token = create_access_token(
         data={"sub": str(user.id), "role": user.role_id}
     )
-    
-    # 5. Configurar la Cookie HTTP-Only para máxima seguridad
-    # ENFOQUE LOCALSTORAGE (Comentado por seguridad):
-    # Si se quisiera guardar en el LocalStorage, simplemente se retornaría esto:
-    # return {"access_token": access_token, "token_type": "bearer"}
-    # El Frontend (React/Next) lo recibiría e iría a guardarlo en localStorage.setItem()
-    # Desventaja: Vulnerable a ataques XSS.
-    
-    # ENFOQUE SEGURO (Cookie HttpOnly):
-    # Se usa Response para inyectar la cookie directamente de vuelta al navegador del usuario
+
+    # 5. Configurar la cookie HTTP-Only y retornar la respuesta
     response = Response(status_code=status.HTTP_200_OK)
     response.set_cookie(
         key="access_token",
         value=f"Bearer {access_token}",
-        httponly=True,  # ESTO ES LA MAGIA: Impide que JavaScript (y hackers por XSS) lean la cookie
-        secure=False,   # CAMBIADO A False: Para que funcione en http://localhost (sin HTTPS)
+        httponly=True,  # Bloquea el acceso desde JavaScript (protección XSS)
+        secure=False,   # False para http://localhost. En producción debe ser True (HTTPS)
         samesite="lax", # Previene ataques CSRF (Cross-Site Request Forgery)
-        max_age=1800    # 30 minutos (igual que el token)
+        max_age=1800,   # 30 minutos (igual que el tiempo de vida del token)
     )
-    
-    # IMPORTANTE: Se retorna el objeto 'response' para que FastAPI
-    # envíe la cookie que se acaba de configurar al navegador.
     return response
+
+
+@router.post("/logout", status_code=status.HTTP_200_OK)
+@_limiter.limit("10/minute")
+def logout(request: Request, response: Response):
+    """
+    Cierra la sesión del usuario eliminando la cookie JWT del navegador.
+
+    FastAPI no puede "invalidar" el JWT en el servidor porque los tokens
+    son stateless (sin estado). La estrategia estándar es pedirle al
+    navegador que borre la cookie, lo cual equivale a cerrar sesión.
+
+    Rate limit: 10 requests por minuto por IP. Límite razonable para
+    prevenir el uso abusivo del endpoint (aunque tiene bajo riesgo).
+
+    Args:
+        request:  Objeto Request de FastAPI (requerido por slowapi).
+        response: Objeto Response de FastAPI. Se inyecta para poder
+                  modificar las cookies sin perder el control del status code.
+
+    Returns:
+        JSON con mensaje de confirmación y la cookie `access_token`
+        eliminada del navegador (max_age=0).
+
+    Raises:
+        HTTPException(429): Si se superan los 10 intentos por minuto.
+
+    Notes:
+        `delete_cookie` con los mismos atributos que `set_cookie` es necesario
+        para que el navegador reconozca que es la misma cookie a eliminar.
+        Si los atributos no coinciden, algunos navegadores ignoran la eliminación.
+    """
+    # Sobreescribir la cookie con max_age=0 para que el navegador la elimine
+    response.delete_cookie(
+        key="access_token",
+        httponly=True,
+        samesite="lax",
+    )
+    return {"message": "Sesión cerrada correctamente"}

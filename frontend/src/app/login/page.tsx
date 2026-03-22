@@ -2,26 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
-/**
- * LoginPage Component
- * 
- * @description
- * Renderiza el formulario de inicio de sesión de la aplicación.
- * Captura las credenciales del usuario (email y contraseña) y las envía al endpoint de autenticación del backend.
- * Si las credenciales son válidas, el backend establece una cookie HTTP-only con el JWT y el usuario es redirigido al panel principal.
- * 
- * @returns {JSX.Element} Formulario de inicio de sesión renderizado.
- * 
- * @dependencies
- * - `useState`: Para la gestión de los datos del formulario (email, password) y estados de UI (error, carga).
- * - `useRouter`: Para controlar la navegación post-login hacia el dashboard.
- * - `fetch`: Función nativa para realizar la petición HTTP al backend de FastAPI.
- * 
- * @notes
- * El endpoint de login de FastAPI espera los datos en formato URL-encoded (`application/x-www-form-urlencoded`) 
- * en lugar de JSON, como lo dicta el estándar de OAuth2 con Password Flow.
- */
 export default function LoginPage() {
   const router = useRouter();
 
@@ -31,26 +13,12 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  /**
-   * Maneja el evento de envío (submit) del formulario de login.
-   * 
-   * @param {React.FormEvent} e - El evento del formulario disparado por el envío.
-   */
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setIsLoading(true);
 
     try {
-      /*
-       * Construir los datos del formulario.
-       * 
-       * ¿Dónde se guardan al enviar?
-       * La varibale `formData` crea un objeto temporal en la memoria del navegador
-       * con la información que recolectó de las variables `email` y `password`.
-       * Luego, este objeto temporal viaja completo por internet a través de la petición HTTP (fetch).
-       * No se guarda en el disco duro; vive solo durante la transacción.
-       */
       const formData = new URLSearchParams();
       formData.append("username", email);
       formData.append("password", password);
@@ -58,84 +26,98 @@ export default function LoginPage() {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
       const response = await fetch(`${API_URL}/login/token`, {
         method: "POST",
-        /*
-         * Encabezados de la petición (Headers):
-         * 
-         * FastAPI por defecto usa el estándar OAuth2, el cual especifica
-         * que los formularios de login deben enviar los datos codificados en la URL,
-         * como si los hubieses puesto en la barra superior (ej: username=abc&password=123).
-         * 
-         * Decirle esto mediante el "Content-Type" le "enseña" al servidor cómo
-         * deconstruir y entender el paquete de datos que acabamos de enviarle en el cuerpo (body).
-         */
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
         },
         body: formData,
+        credentials: "include", 
       });
 
       if (response.ok) {
-        // Redirigir al dashboard si la autenticación es exitosa y la cookie se ha guardado.
         router.push("/dashboard");
       } else {
-        // Extraer y mostrar el mensaje de error provisto por FastAPI (ej. 401 Unauthorized).
         const errorData = await response.json();
         setError(errorData.detail || "Error al iniciar sesión");
       }
     } catch (err) {
-      setError("Error de red.");
+      setError("Error de red tratando de contactar al servidor.");
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-100 px-4">
-      <div className="w-full max-w-md bg-white rounded-lg shadow-md p-8">
-        <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">
-          Iniciar Sesión
+    <div className="min-h-screen bg-slate-950 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <div className="sm:mx-auto sm:w-full sm:max-w-md">
+        <h2 className="mt-6 text-center text-2xl font-bold tracking-tight text-white">
+          Support App
         </h2>
+        <p className="mt-2 text-center text-sm text-slate-400">
+          Inicia sesión en tu cuenta
+        </p>
+      </div>
 
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="mt-1 block w-full rounded-md border text-slate-900 border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              placeholder="tu@correo.com"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Contraseña</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="mt-1 block w-full rounded-md border text-slate-900 border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              placeholder="••••••••"
-            />
-          </div>
-
-          {error && (
-            <div className="p-3 bg-red-50 text-red-600 text-sm rounded-md border border-red-200">
-              {error}
+      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-[400px]">
+        <div className="bg-slate-900 border border-slate-800 py-8 px-4 shadow-sm sm:rounded-xl sm:px-10">
+          <form className="space-y-6" onSubmit={handleLogin}>
+            <div>
+              <label className="block text-sm font-medium text-slate-300">
+                Correo Electrónico
+              </label>
+              <div className="mt-2">
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="block w-full rounded-md border-0 bg-slate-950 py-1.5 text-white shadow-sm ring-1 ring-inset ring-slate-800 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:text-sm sm:leading-6 px-3"
+                  placeholder="tu@correo.com"
+                />
+              </div>
             </div>
-          )}
 
-          <button
-            type="submit"
-            disabled={isLoading}
-            className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white 
-              ${isLoading ? "bg-blue-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"}`}
-          >
-            {isLoading ? "Iniciando sesión..." : "Entrar a mi Cuenta"}
-          </button>
-        </form>
+            <div>
+              <label className="block text-sm font-medium text-slate-300">
+                Contraseña
+              </label>
+              <div className="mt-2">
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="block w-full rounded-md border-0 bg-slate-950 py-1.5 text-white shadow-sm ring-1 ring-inset ring-slate-800 focus:ring-2 focus:ring-inset focus:ring-blue-500 sm:text-sm sm:leading-6 px-3"
+                  placeholder="••••••••"
+                />
+              </div>
+            </div>
+
+            {error && (
+              <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-md p-3 text-center">
+                {error}
+              </div>
+            )}
+
+            <div>
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="flex w-full justify-center rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:bg-blue-800 disabled:opacity-50 transition-colors"
+              >
+                {isLoading ? "Iniciando sesión..." : "Iniciar Sesión"}
+              </button>
+            </div>
+          </form>
+
+          <div className="mt-6 text-center">
+            <p className="text-sm text-slate-400">
+              ¿No tienes cuenta?{" "}
+              <Link href="/register" className="font-semibold text-blue-500 hover:text-blue-400">
+                Regístrate
+              </Link>
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );
