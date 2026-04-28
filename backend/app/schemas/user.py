@@ -23,9 +23,9 @@ class UserCreate(UserBase):
     # En el router la hashearemos antes de guardarla en hashed_password.
     password: str
 
-    # Viene del modelo: role_id: Mapped[int] (ForeignKey → roles.id, nullable=False)
-    # Por defecto ponemos 2 asumiendo que 1=admin y 2=usuario/cliente
-    role_id: int = 2
+    # role_id 3 = Cliente (valor por defecto para registro público).
+    # Técnicos (2) y Administradores (1) deben asignarse manualmente desde la BD.
+    role_id: int = 3
 
 
 # ─────────────────────────────────────────────────────────────────────────────

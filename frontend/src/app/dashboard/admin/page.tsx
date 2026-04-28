@@ -6,7 +6,6 @@ import { getAllTickets } from "@/services/ticketService";
 import { getMe } from "@/services/userService";
 import type { TicketRead } from "@/types/ticket";
 import type { UserRead } from "@/types/user";
-import Link from "next/link";
 
 // Helpers visuales (podrían extraerse a un archivo compartido utils.ts)
 function getStatusStyle(status: TicketRead["status"]): string {
@@ -104,9 +103,6 @@ export default function AdminDashboardPage() {
             <h1 className="text-3xl font-bold text-white tracking-tight">Admin <span className="text-indigo-400">Dashboard</span></h1>
             <p className="text-gray-400">Bienvenido, {currentUser.full_name} ({currentUser.role_id === 1 ? "Admin" : "Técnico"}).</p>
           </div>
-          <Link href="/dashboard" className="text-sm text-gray-400 hover:text-white underline">
-            Volver a vista cliente
-          </Link>
         </header>
 
         {/* Action Bar (Filtros y Tabs) */}
