@@ -1,4 +1,7 @@
-from typing import Generator
+from typing import Generator, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.models.user import User
 
 import jwt
 from fastapi import Cookie, Depends, HTTPException, status
@@ -123,3 +126,33 @@ def get_current_user(
         raise credentials_exception
 
     return user
+
+
+# ---------------------------------------------------------------------------
+# Dependencia de Autorización (Roles)
+# ---------------------------------------------------------------------------
+
+def get_current_admin_user(current_user: "User" = Depends(get_current_user)):
+    """
+    Verifica que el usuario autenticado tenga rol de Administrador (1) o Técnico (2).
+    
+    FastAPI usa inyección de dependencias encadenadas: primero se ejecuta
+    get_current_user, y si es exitoso, pasa el resultado a esta función.
+    
+    Args:
+        current_user: El usuario autenticado, resultado de get_current_user.
+        
+    Returns:
+        User: El mismo usuario si tiene privilegios.
+        
+    Raises:
+        HTTPException(403): Si el usuario es un cliente normal (rol 3) intentando
+                            acceder a un endpoint bloqueado.
+    """
+    # 1: Administrador, 2: Técnico, 3: Cliente
+    if current_user.role_id not in [1, 2]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permisos para realizar esta acción.",
+        )
+    return current_user

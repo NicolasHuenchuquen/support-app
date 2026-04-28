@@ -46,3 +46,18 @@ export async function getUsers(): Promise<UserRead[]> {
 
     return response.json() as Promise<UserRead[]>;
 }
+
+/**
+ * Obtiene el perfil del usuario actual (en base a HTTP-ONLY cookies JWT).
+ * Llama a GET /users/me
+ * @returns {Promise<UserRead>} Los datos del usuario en sesión
+ */
+export async function getMe(): Promise<UserRead> {
+    const response = await fetch(`${API_URL}/users/me`, {
+        method: "GET",
+        credentials: "include"
+    });
+
+    if (!response.ok) throw new Error("No estás autenticado");
+    return response.json() as Promise<UserRead>;
+}

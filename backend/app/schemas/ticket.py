@@ -59,6 +59,8 @@ class TicketRead(BaseModel):
     status: str
     priority_id: int
     user_id: int
+    # Permite al frontend saber si este ticket ya fue tomado por un administrador/técnico
+    assigned_technician_id: int | None = None
     created_at: datetime.datetime
     updated_at: datetime.datetime
 

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { getMe } from "@/services/userService";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -34,7 +35,15 @@ export default function LoginPage() {
       });
 
       if (response.ok) {
-        router.push("/dashboard");
+        // Consultamos el rol del usuario para redirigir al panel correcto.
+        // role_id 1 = Admin, 2 = Técnico → panel de administración.
+        // role_id 3 = Cliente → dashboard normal.
+        const me = await getMe();
+        if (me.role_id === 1 || me.role_id === 2) {
+          router.push("/dashboard/admin");
+        } else {
+          router.push("/dashboard");
+        }
       } else {
         const errorData = await response.json();
         setError(errorData.detail || "Error al iniciar sesión");

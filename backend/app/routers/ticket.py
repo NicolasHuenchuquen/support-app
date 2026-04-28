@@ -3,7 +3,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 from sqlalchemy.orm import Session
 
-from app.dependencies import get_current_user, get_db
+from app.dependencies import get_current_user, get_db, get_current_admin_user
 from app.models.ticket import Ticket
 from app.models.user import User
 from app.schemas.ticket import TicketCreate, TicketRead
@@ -170,3 +170,149 @@ def get_my_tickets(
         .all()
     )
     return tickets
+
+
+@router.get(
+    "/all",
+    response_model=list[TicketRead],
+)
+@_limiter.limit("60/minute", key_func=_limit_by_user_id)
+def get_all_tickets(
+    request: Request,
+    db: Session = Depends(get_db),
+    admin_user: User = Depends(get_current_admin_user),
+    status_filter: str | None = None,
+    sort_by: str = "newest"
+) -> list[TicketRead]:
+    """
+    Retorna todos los tickets del sistema de forma paginada/filtrada.
+    Solo accesible para Administradores o Técnicos.
+    
+    Args:
+        request: Requerido por el rate limiter.
+        db: Sesión de Base de Datos.
+        admin_user: Extrae al usuario y valida sus permisos administradores.
+        status_filter: Opcionalmente retorna tickets para un solo status (ej: open).
+        sort_by: newest (más nuevos) u oldest (más antiguos).
+    
+    Returns:
+        list[TicketRead]: Un array de todos los resultados coincidentes.
+    """
+    query = db.query(Ticket)
+    
+    if status_filter:
+        query = query.filter(Ticket.status == status_filter)
+        
+    if sort_by == "oldest":
+        query = query.order_by(Ticket.created_at.asc())
+    else:
+        query = query.order_by(Ticket.created_at.desc())
+        
+    return query.all()
+
+
+@router.patch("/{ticket_id}/assign", response_model=TicketRead)
+def assign_ticket(
+    ticket_id: int,
+    db: Session = Depends(get_db),
+    admin_user: User = Depends(get_current_admin_user)
+) -> TicketRead:
+    """
+    Asigna un ticket a un técnico o administrador.
+    Cambia el status a 'in_progress' y genera una traza (mensaje automático)
+    que indica quién tomó el ticket.
+    
+    Args:
+        ticket_id: El ID del ticket pasado en la URL del request.
+        db: Sesión de BD.
+        admin_user: El usuario privilegiado que llamó al endpoint.
+        
+    Returns:
+        TicketRead: El ticket completamente procesado con los nuevos cambios.
+    """
+    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket no encontrado")
+        
+    if ticket.assigned_technician_id == admin_user.id:
+        # Ya está asignado a esta persona
+        return ticket
+
+    # Modificamos la asignación y pasamos el estado a en-progreso
+    ticket.assigned_technician_id = admin_user.id
+    if ticket.status == "open":
+        ticket.status = "in_progress"
+        
+    # Registro de auditoría: solo visible para admins en la vista de detalle de ticket.
+    from app.models.message import Message  # importación local para evitar imports circulares
+    system_msg = Message(
+        content=f"Ticket asignado a {admin_user.email} (ID: {admin_user.id})",
+        is_system=True,
+        ticket_id=ticket.id,
+        author_id=admin_user.id
+    )
+    db.add(system_msg)
+    
+    db.commit()
+    db.refresh(ticket)
+    return ticket
+
+
+@router.patch("/{ticket_id}/unassign", response_model=TicketRead)
+def unassign_ticket(
+    ticket_id: int,
+    db: Session = Depends(get_db),
+    admin_user: User = Depends(get_current_admin_user)
+) -> TicketRead:
+    """
+    Remueve la asignación técnica de un ticket, regresándolo a la "Bandeja".
+    Devuelve su estado a 'open'.
+    
+    Args:
+        ticket_id: ID del ticket de la URL.
+        db: Sesión BD.
+        admin_user: El administrador llevando la operación.
+        
+    Returns:
+        TicketRead: El ticket devuelto a estado general.
+    """
+    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket no encontrado")
+        
+    ticket.assigned_technician_id = None
+    ticket.status = "open"
+    
+    # Creamos notificación de auditoría
+    from app.models.message import Message
+    system_msg = Message(
+        content="El ticket ha sido desasignado y regresado a la bandeja.",
+        is_system=True,
+        ticket_id=ticket.id,
+        author_id=admin_user.id
+    )
+    db.add(system_msg)
+    
+    db.commit()
+    db.refresh(ticket)
+    return ticket
+
+
+@router.get("/{ticket_id}", response_model=TicketRead)
+def get_ticket(
+    ticket_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+) -> TicketRead:
+    """
+    Obtiene los detalles de un solo ticket. Si eres cliente, te restringe solo a los tuyos.
+    Si eres admin o técnico, puedes ver cualquiera.
+    """
+    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket no encontrado")
+        
+    if current_user.role_id == 3 and ticket.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="No tienes acceso a este ticket")
+        
+    return ticket

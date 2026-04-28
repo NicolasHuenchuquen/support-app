@@ -32,9 +32,6 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 export async function getMyTickets(): Promise<TicketRead[]> {
   const response = await fetch(`${API_URL}/tickets/me`, {
     method: "GET",
-    // `credentials: "include"` es la instrucción al navegador para
-    // adjuntar la cookie access_token en este request cross-origin.
-    // Sin esto, la API retornaría 401 aunque el usuario esté logueado.
     credentials: "include",
   });
 
@@ -111,4 +108,133 @@ export async function logout(): Promise<void> {
     method: "POST",
     credentials: "include",
   });
+}
+
+/**
+ * Obtiene todos los tickets del sistema (privilegiado: solo Admins/Técnicos).
+ *
+ * @description
+ * Realiza un `GET /tickets/all` enviando filtros por Query String.
+ * Este endpoint está protegido y solo devuelve resultados si el usuario
+ * tiene rol de Administrador o Soporte Técnico.
+ *
+ * @param {string} [status_filter] - Filtro opcional por estado del ticket (ej. "open", "in_progress").
+ * @param {string} [sort_by="newest"] - Ordenamiento de los tickets ("newest" o "oldest").
+ *
+ * @returns {Promise<TicketRead[]>} Lista de tickets filtrados y ordenados.
+ *
+ * @throws {Error} Si el usuario no tiene permisos (403), no está autenticado (401),
+ *                 o si ocurre un error en el servidor.
+ *
+ * @dependencies
+ * - `TicketRead`: Interface TypeScript para tipar la respuesta.
+ * - URL y URLSearchParams: APIs nativas para construir el Query String de forma segura.
+ * - `credentials: "include"`: Necesario para enviar la cookie JWT cross-origin.
+ */
+export async function getAllTickets(status_filter?: string, sort_by: string = "newest"): Promise<TicketRead[]> {
+  const url = new URL(`${API_URL}/tickets/all`);
+  if (status_filter) url.searchParams.append("status_filter", status_filter);
+  url.searchParams.append("sort_by", sort_by);
+
+  const response = await fetch(url.toString(), {
+    method: "GET",
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.detail ?? "Error al obtener los tickets globales");
+  }
+
+  return response.json() as Promise<TicketRead[]>;
+}
+
+/**
+ * Obtiene los detalles de un ticket específico a través de su ID.
+ *
+ * @description
+ * Realiza un `GET /tickets/{ticketId}`.
+ * Si el usuario es un cliente regular (rol 3), el backend verificará
+ * que el ticket le pertenezca. Si es un administrador o técnico (rol 1 o 2),
+ * podrá acceder al ticket sin importar el propietario.
+ *
+ * @param {number} ticketId - El identificador único numérico del ticket a consultar.
+ *
+ * @returns {Promise<TicketRead>} El objeto con todos los detalles del ticket solicitado.
+ *
+ * @throws {Error} Si el ticket no existe (404), si un cliente intenta ver un ticket
+ *                 ajeno (403), o si ocurre algún error de conexión.
+ *
+ * @dependencies
+ * - `TicketRead`: Interface TypeScript para tipar la respuesta.
+ * - `credentials: "include"`: Necesario para enviar la cookie JWT cross-origin.
+ */
+export async function getTicketById(ticketId: number): Promise<TicketRead> {
+  const response = await fetch(`${API_URL}/tickets/${ticketId}`, {
+    method: "GET",
+    credentials: "include",
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.detail || "Error al obtener el ticket");
+  }
+  return response.json() as Promise<TicketRead>;
+}
+
+/**
+ * Asigna un ticket al usuario autenticado (Admin/Técnico).
+ *
+ * @description
+ * Realiza un `PATCH /tickets/{ticketId}/assign`.
+ * El backend identifica al administrador/técnico usando la cookie JWT y lo asigna
+ * como responsable del ticket, cambiando el estado a "in_progress" automáticamente.
+ * Además, genera un mensaje de sistema para dejar trazabilidad de la acción.
+ *
+ * @param {number} ticketId - ID del ticket que se desea tomar.
+ *
+ * @returns {Promise<TicketRead>} El ticket actualizado con el técnico asignado y
+ *                                el nuevo estado.
+ *
+ * @throws {Error} Si el ticket no existe (404), si el usuario no tiene permisos (403),
+ *                 o si ocurre un error en la solicitud.
+ *
+ * @dependencies
+ * - `TicketRead`: Interface TypeScript para tipar la respuesta.
+ * - `credentials: "include"`: Necesario para enviar la cookie JWT cross-origin.
+ */
+export async function assignTicket(ticketId: number): Promise<TicketRead> {
+  const response = await fetch(`${API_URL}/tickets/${ticketId}/assign`, {
+    method: "PATCH",
+    credentials: "include",
+  });
+  if (!response.ok) throw new Error("Error al asignar el ticket");
+  return response.json() as Promise<TicketRead>;
+}
+
+/**
+ * Remueve la asignación técnica de un ticket, regresándolo a la bandeja general.
+ *
+ * @description
+ * Realiza un `PATCH /tickets/{ticketId}/unassign`.
+ * El backend quita al técnico asignado (lo vuelve `null`), cambia el estado del
+ * ticket de vuelta a "open", y genera un mensaje de sistema para auditoría.
+ *
+ * @param {number} ticketId - ID del ticket que se desea devolver (desasignar).
+ *
+ * @returns {Promise<TicketRead>} El ticket actualizado, en estado "open" y sin técnico.
+ *
+ * @throws {Error} Si el ticket no existe (404), si el usuario no tiene permisos (403),
+ *                 o si ocurre un error en la solicitud.
+ *
+ * @dependencies
+ * - `TicketRead`: Interface TypeScript para tipar la respuesta.
+ * - `credentials: "include"`: Necesario para enviar la cookie JWT cross-origin.
+ */
+export async function unassignTicket(ticketId: number): Promise<TicketRead> {
+  const response = await fetch(`${API_URL}/tickets/${ticketId}/unassign`, {
+    method: "PATCH",
+    credentials: "include",
+  });
+  if (!response.ok) throw new Error("Error al desasignar el ticket");
+  return response.json() as Promise<TicketRead>;
 }

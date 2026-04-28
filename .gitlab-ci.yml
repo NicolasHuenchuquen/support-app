@@ -18,6 +18,7 @@ test_backend:
   variables:
     DATABASE_URL: "postgresql://user:pass@localhost/test_db"
     SECRET_KEY: "supersecret-ci-testing-key"
+    FRONTEND_URL: "http://localhost:3000"
 
   # Este bloque 'before_script' se ejecuta antes del script principal.
   # Es ideal para instalar dependencias.
@@ -28,5 +29,7 @@ test_backend:
     
   # Este es el comando real que determina si el Job pasa (verde) o falla (rojo)
   script:
-    # Corremos todos los tests de la carpeta "tests"
-    - pytest tests -v
+    # Usamos `python -m pytest` en lugar de `pytest` directamente.
+    # Esto agrega backend/ al sys.path, necesario para que los imports
+    # `from tests.conftest import ...` de los archivos de test funcionen en CI.
+    - python -m pytest tests -v

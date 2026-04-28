@@ -50,4 +50,6 @@ export interface TicketRead {
   created_at: string;
   /** Fecha y hora UTC de la última actualización del ticket (ISO 8601). */
   updated_at: string;
+  /** ID del técnico/administrador asignado, si existe. */
+  assigned_technician_id: number | null;
 }

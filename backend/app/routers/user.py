@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.schemas.user import UserCreate, UserRead
 from app.models.user import User
-from app.dependencies import get_db
+from app.dependencies import get_db, get_current_user
 from app.core.security import get_password_hash
 
 # ---------------------------------------------------------------------------
@@ -116,3 +116,21 @@ def list_users(
         - get_db: Provee y cierra la sesión de BD automáticamente.
     """
     return db.query(User).all()
+
+@router.get("/me", response_model=UserRead)
+def get_my_profile(
+    request: Request,
+    current_user: User = Depends(get_current_user)
+) -> UserRead:
+    """
+    Retorna la información del perfil del usuario actualmente autenticado.
+    Útil para que el frontend determine el ID y el rol del usuario logueado.
+    
+    Args:
+        request: El request entrante.
+        current_user: El usuario obtenido de la verificación del JWT.
+        
+    Returns:
+        UserRead: Los datos públicos del usuario.
+    """
+    return current_user

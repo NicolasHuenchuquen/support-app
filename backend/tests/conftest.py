@@ -5,6 +5,10 @@ import sys
 os.environ["DATABASE_URL"] = "postgresql://mock:mock@localhost:5432/mock_db"
 os.environ["SECRET_KEY"] = "testing-secret-key-that-is-long-enough-to-pass-security-checks"
 os.environ["FRONTEND_URL"] = "http://localhost:3000"
+# Desactiva el rate limiter de slowapi durante los tests.
+# Sin esto, todos los tests comparten el mismo "key" (testclient) y
+# se bloquean entre sí con HTTP 429 porque superan el límite.
+os.environ["RATELIMIT_ENABLED"] = "0"
 
 import pytest
 from sqlalchemy import create_engine
@@ -92,3 +96,27 @@ def client(db_session):
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# Helper compartido entre todos los archivos de tests
+# ---------------------------------------------------------------------------
+
+def register_and_login(client: TestClient, email: str, password: str = "Password123!", role_id: int = 1) -> dict:
+    """
+    Registra un usuario y hace login. Retorna las cookies de sesión como dict.
+    
+    Args:
+        client:   El TestClient de FastAPI (con BD de prueba inyectada).
+        email:    Email único del usuario a crear.
+        password: Contraseña del usuario (por defecto válida).
+        role_id:  1=Administrador, 2=Técnico, 3=Cliente (sin privilegios).
+                  El check de admin en la app acepta role_id in [1, 2].
+    
+    Returns:
+        dict: Cookies del login (contiene "access_token").
+    """
+    client.post("/users/", json={"email": email, "password": password, "role_id": role_id})
+    login_res = client.post("/login/token", data={"username": email, "password": password})
+    assert login_res.status_code == 200, f"Login falló para {email}: {login_res.text}"
+    return dict(login_res.cookies)

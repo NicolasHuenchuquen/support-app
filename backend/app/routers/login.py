@@ -65,11 +65,8 @@ def login_for_access_token(
         - get_db: Provee la sesión de BD.
 
     Notes:
-        ENFOQUE COOKIE vs LOCALSTORAGE:
-        - localStorage: Más simple, pero vulnerable a ataques XSS (un script
-          malicioso podría leer el token).
-        - Cookie HttpOnly (este enfoque): JavaScript no puede leerla.
-          El navegador la envía automáticamente en cada request al mismo dominio.
+        Se usa cookie HttpOnly en lugar de localStorage para evitar exposición
+        del token a scripts del cliente (protección XSS).
     """
     # 1. Buscar al usuario en la BD por email (que viene en el campo "username")
     user = db.query(User).filter(User.email == form_data.username).first()

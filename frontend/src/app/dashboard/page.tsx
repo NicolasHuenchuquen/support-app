@@ -188,7 +188,7 @@ export default function DashboardPage() {
       }
     }
     fetchTickets();
-  }, []); // El array vacío [] significa: ejecutar solo al montar el componente
+  }, []);
 
   // ---------------------------------------------------------------------------
   // Handlers
@@ -218,7 +218,6 @@ export default function DashboardPage() {
       // Resetear el formulario a los valores por defecto
       setForm({ title: "", description: "", priority_id: 2 });
 
-      // Navegar automáticamente a la tab de tickets tras 1.5 segundos
       setTimeout(() => {
         setActiveTab("tickets");
         setCreateSuccess(false);
@@ -253,8 +252,6 @@ export default function DashboardPage() {
   // Derivaciones de datos
   // ---------------------------------------------------------------------------
 
-  // Separar tickets activos y resueltos del array completo.
-  // `.filter()` crea un nuevo array con solo los elementos que cumplen la condición.
   const activeTickets = tickets.filter(
     (t) => t.status === "open" || t.status === "in_progress"
   );
@@ -314,11 +311,10 @@ export default function DashboardPage() {
               key={tab}
               id={`tab-${tab}`}
               onClick={() => setActiveTab(tab)}
-              className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all duration-200 ${
-                activeTab === tab
+              className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all duration-200 ${activeTab === tab
                   ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/25"
                   : "text-gray-400 hover:text-white"
-              }`}
+                }`}
             >
               {tab === "tickets" ? "📋 Mis Tickets" : "➕ Crear Ticket"}
             </button>
