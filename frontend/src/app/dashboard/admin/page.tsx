@@ -6,6 +6,7 @@ import { getAllTickets } from "@/services/ticketService";
 import { getMe } from "@/services/userService";
 import type { TicketRead } from "@/types/ticket";
 import type { UserRead } from "@/types/user";
+import Link from "next/link";
 
 // Helpers visuales (podrían extraerse a un archivo compartido utils.ts)
 function getStatusStyle(status: TicketRead["status"]): string {
@@ -174,7 +175,6 @@ export default function AdminDashboardPage() {
                   <span className="text-gray-500 text-xs">
                     {new Date(ticket.created_at).toLocaleDateString()}
                   </span>
-                  {/* BOTON SOLICITADO: Este botón nos redirige al DETALLE (que simula el chat) para poder tomarlo/trabajarlo */}
                   <Link
                     href={`/dashboard/admin/tickets/${ticket.id}`}
                     className="mt-2 bg-slate-800 hover:bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm transition"

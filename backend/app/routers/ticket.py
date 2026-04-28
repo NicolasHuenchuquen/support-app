@@ -243,8 +243,10 @@ def assign_ticket(
     if ticket.status == "open":
         ticket.status = "in_progress"
         
-    # Registro de auditoría: solo visible para admins en la vista de detalle de ticket.
-    from app.models.message import Message  # importación local para evitar imports circulares
+    # LOGICA DE TRAZABILIDAD INTELIGENTE
+    # Creamos un Message invisible para clientes 'comunes', pero indicará al UI 
+    # de administrador que este evento sucedió. Todo reside en tabla messages.
+    from app.models.message import Message # importación en línea para evitar circulares
     system_msg = Message(
         content=f"Ticket asignado a {admin_user.email} (ID: {admin_user.id})",
         is_system=True,
