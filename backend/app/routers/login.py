@@ -7,6 +7,8 @@ from sqlalchemy.orm import Session
 from app.dependencies import get_db
 from app.models.user import User
 from app.core.security import verify_password, create_access_token
+from app.core.config import settings
+
 
 # ---------------------------------------------------------------------------
 # Configuración del Rate Limiter
@@ -92,15 +94,18 @@ def login_for_access_token(
         data={"sub": str(user.id), "role": user.role_id}
     )
 
-    # 5. Configurar la cookie HTTP-Only y retornar la respuesta
+    # En producción (Vercel → Render) la cookie necesita secure=True y samesite="none"
+    # para viajar entre dominios distintos. Localmente funciona con secure=False y samesite="lax".
+    is_production = settings.ENVIRONMENT == "production"
+
     response = Response(status_code=status.HTTP_200_OK)
     response.set_cookie(
         key="access_token",
         value=f"Bearer {access_token}",
-        httponly=True,  # Bloquea el acceso desde JavaScript (protección XSS)
-        secure=False,   # False para http://localhost. En producción debe ser True (HTTPS)
-        samesite="lax", # Previene ataques CSRF (Cross-Site Request Forgery)
-        max_age=1800,   # 30 minutos (igual que el tiempo de vida del token)
+        httponly=True, # Bloquea el acceso desde JavaScript (protección XSS)
+        secure=is_production, # False para http://localhost. En producción debe ser True (HTTPS)
+        samesite="none" if is_production else "lax", # Previene ataques CSRF (Cross-Site Request Forgery)
+        max_age=1800, # 30 minutos (igual que el tiempo de vida del token)
     )
     return response
 
