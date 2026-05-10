@@ -36,9 +36,9 @@ export default function AdminDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // Manejo de tabs (Pestañas) en el frontend
-  // 'inbox': Tickets sin asignar (bandeja pública).
-  // 'mytickets': Tickets que YO (como técnico) estoy administrando.
+  // Gestión de estado para las pestañas de navegación
+  // 'inbox': Tickets no asignados (bandeja pública).
+  // 'mytickets': Tickets asignados explícitamente al técnico actual.
   const [activeTab, setActiveTab] = useState<"inbox" | "mytickets">("inbox");
 
   // Filtros
@@ -46,15 +46,15 @@ export default function AdminDashboardPage() {
   const [sortBy, setSortBy] = useState<"newest" | "oldest">("newest");
 
   /**
-   * Efecto inicial: Carga el perfil del usuario actual (getMe).
-   * Si no es Admin/Técnico, lo expulsa.
+   * Efecto de inicialización: Obtiene el perfil del usuario autenticado.
+   * Redirige a usuarios sin privilegios administrativos (rol 3) al dashboard general.
    */
   useEffect(() => {
     async function fetchUser() {
       try {
         const user = await getMe();
         if (user.role_id === 3) { // 3 = Cliente normal
-          router.push("/dashboard"); // Lo mandamos devuelta al dash normal
+          router.push("/dashboard"); // Redirección al dashboard estándar
           return;
         }
         setCurrentUser(user);
@@ -66,7 +66,7 @@ export default function AdminDashboardPage() {
   }, [router]);
 
   /**
-   * Efecto dinámico: Recarga tickets cada vez que cambiamos filtros de backend.
+   * Efecto reactivo: Actualiza la lista de tickets ante cambios en los parámetros de filtrado.
    */
   useEffect(() => {
     if (!currentUser) return; // Solo buscar si ya verificamos el auth
@@ -85,11 +85,11 @@ export default function AdminDashboardPage() {
     fetchAll();
   }, [currentUser, statusFilter, sortBy]);
 
-  // Derivaciones: Clasificamos y filtramos de manera inteligente
-  // "Bandeja de Entrada" (inbox): Todo lo que no está cerrado Y nadie lo ha tomado aún.
+  // Clasificación y filtrado de tickets por estado de asignación
+  // 'inbox': Tickets activos (no cerrados) sin técnico asignado
   const inboxTickets = tickets.filter(t => t.assigned_technician_id === null && t.status !== "closed");
 
-  // "Mis Tickets" (mytickets): Todo lo que está asignado explícitamente a MÍ.
+  // 'mytickets': Tickets asignados al usuario actual
   const myTickets = tickets.filter(t => t.assigned_technician_id === currentUser?.id);
 
   const displayList = activeTab === "inbox" ? inboxTickets : myTickets;

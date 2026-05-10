@@ -3,21 +3,21 @@ import os
 from sqlalchemy import engine_from_config, pool
 from alembic import context
 
-# 1. Agregamos la carpeta 'backend' al path de Python para que Alembic encuentre los modelos
+# 1. Inclusión del directorio 'backend' en el path para la resolución de modelos por Alembic
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# 2. Importamos los modelos y la configuración
+# 2. Importación de modelos y configuración
 from app.models.base import Base
-import app.models  # Esto registra User, Ticket, etc. en Base.metadata
+import app.models  # Registra las entidades (User, Ticket, etc.) en Base.metadata
 from app.core.config import settings
 
-# 3. Obtenemos el objeto de configuración de Alembic
+# 3. Obtención del objeto de configuración de Alembic
 config = context.config
 
-# 4. Le pasamos los modelos a Alembic para el "autogenerate"
+# 4. Asignación de metadata de modelos para la funcionalidad "autogenerate"
 target_metadata = Base.metadata
 
-# 5. Sobreescribimos la URL de la base de datos con la del .env / Docker
+# 5. Sobrescritura de la URL de base de datos utilizando la configuración del entorno
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
 

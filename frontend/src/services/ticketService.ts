@@ -32,6 +32,9 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 export async function getMyTickets(): Promise<TicketRead[]> {
   const response = await fetch(`${API_URL}/tickets/me`, {
     method: "GET",
+    // La directiva `credentials: "include"` instruye al navegador a
+    // adjuntar la cookie access_token en solicitudes cross-origin,
+    // previniendo errores de autorización (HTTP 401).
     credentials: "include",
   });
 

@@ -29,7 +29,7 @@ from app.models.priority import Priority
 from app.models.message import Message
 from app.models.role import Role
 
-# Usamos SQLite en memoria/archivo temporal para las pruebas rápidas y aisladas
+# Configuración de SQLite local para la ejecución de pruebas ágiles y aisladas
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test_api.db"
 
 engine = create_engine(
@@ -104,7 +104,7 @@ def client(db_session):
 
 def register_and_login(client: TestClient, email: str, password: str = "Password123!", role_id: int = 1) -> dict:
     """
-    Registra un usuario y hace login. Retorna las cookies de sesión como dict.
+    Realiza el registro y autenticación de un usuario, retornando las cookies de sesión.
     
     Args:
         client:   El TestClient de FastAPI (con BD de prueba inyectada).

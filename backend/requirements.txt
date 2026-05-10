@@ -12,6 +12,7 @@ python-multipart==0.0.9
 email-validator==2.3.0
 psycopg2-binary==2.9.11
 slowapi==0.1.9
+websockets==13.1
 
 # --- Dependencias de Testing (Para CI/CD de GitLab) ---
 pytest==8.1.1

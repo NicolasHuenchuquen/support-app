@@ -32,8 +32,8 @@ def get_db() -> Generator[Session, None, None]:
     """
     db = SessionLocal()
     try:
-        # yield le 'presta' la sesión al endpoint y pausa aquí la función.
-        # El endpoint hace su trabajo y cuando termina, el código de abajo continúa.
+        # 'yield' cede la sesión al endpoint suspendiendo la ejecución local.
+        # Al finalizar el procesamiento del endpoint, la ejecución se reanuda para el cierre.
         yield db
     finally:
         # Se ejecuta siempre al final, sin importar si hubo error o no.
@@ -105,8 +105,8 @@ def get_current_user(
     token = access_token.removeprefix("Bearer ")
 
     try:
-        # 3. Decodificar el JWT: esto verifica la firma y la expiración.
-        #    Si el token fue alterado o venció, jwt.decode lanza una excepción.
+        # 3. Decodificación del JWT: verificación de firma y expiración.
+        #    Si el token ha sido alterado o ha expirado, jwt.decode lanzará una excepción.
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
 
         # 4. El campo 'sub' (subject) contiene el ID del usuario, guardado al crear el token.

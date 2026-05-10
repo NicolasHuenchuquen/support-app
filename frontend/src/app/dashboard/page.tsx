@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { getMyTickets, createTicket, logout } from "@/services/ticketService";
 import type { TicketRead, TicketCreate } from "@/types/ticket";
 
@@ -77,33 +78,35 @@ function getPriorityLabel(priorityId: number): string {
  */
 function TicketCard({ ticket }: { ticket: TicketRead }) {
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 hover:bg-slate-800 transition-all duration-200">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-white truncate">{ticket.title}</h3>
-          <p className="text-sm text-gray-400 mt-1 line-clamp-2">{ticket.description}</p>
+    <Link href={`/dashboard/tickets/${ticket.id}`} className="block">
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 hover:bg-slate-800 transition-all duration-200">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold text-white truncate">{ticket.title}</h3>
+            <p className="text-sm text-gray-400 mt-1 line-clamp-2">{ticket.description}</p>
+          </div>
+          {/* Badge de estado */}
+          <span className={`shrink-0 text-xs font-medium px-2.5 py-1 rounded-full ${getStatusStyle(ticket.status)}`}>
+            {getStatusLabel(ticket.status)}
+          </span>
         </div>
-        {/* Badge de estado */}
-        <span className={`shrink-0 text-xs font-medium px-2.5 py-1 rounded-full ${getStatusStyle(ticket.status)}`}>
-          {getStatusLabel(ticket.status)}
-        </span>
-      </div>
 
-      {/* Fila inferior: prioridad y fecha */}
-      <div className="flex items-center justify-between mt-3 pt-3 border-t border-white/5">
-        <span className={`text-xs font-medium flex items-center gap-1 ${getPriorityStyle(ticket.priority_id)}`}>
-          <span>●</span>
-          {getPriorityLabel(ticket.priority_id)}
-        </span>
-        <span className="text-xs text-gray-500">
-          {new Date(ticket.created_at).toLocaleDateString("es-ES", {
-            day: "2-digit",
-            month: "short",
-            year: "numeric",
-          })}
-        </span>
+        {/* Fila inferior: prioridad y fecha */}
+        <div className="flex items-center justify-between mt-3 pt-3 border-t border-white/5">
+          <span className={`text-xs font-medium flex items-center gap-1 ${getPriorityStyle(ticket.priority_id)}`}>
+            <span>●</span>
+            {getPriorityLabel(ticket.priority_id)}
+          </span>
+          <span className="text-xs text-gray-500">
+            {new Date(ticket.created_at).toLocaleDateString("es-ES", {
+              day: "2-digit",
+              month: "short",
+              year: "numeric",
+            })}
+          </span>
+        </div>
       </div>
-    </div>
+    </Link>
   );
 }
 
@@ -167,13 +170,9 @@ export default function DashboardPage() {
   // ---------------------------------------------------------------------------
 
   /**
-   * Carga los tickets del usuario al montar el componente.
-   * Se ejecuta solo una vez (dependencia: []).
-   *
-   * useEffect es el "hook de efectos secundarios" de React.
-   * Un efecto secundario es cualquier operación que interactúa con el mundo
-   * exterior al componente: llamadas a APIs, timers, suscripciones, etc.
-   * En este caso: fetch a la API del backend.
+   * Carga los tickets del usuario durante el montaje del componente.
+   * La dependencia vacía asegura una única ejecución.
+   * Utiliza useEffect para realizar el fetch a la API del backend.
    */
   useEffect(() => {
     async function fetchTickets() {
@@ -208,9 +207,8 @@ export default function DashboardPage() {
     try {
       const newTicket = await createTicket(form);
 
-      // Agregar el ticket nuevo al principio de la lista local (sin refetch)
-      // Esto es más eficiente: evita una llamada extra a la API y la UI
-      // se actualiza instantáneamente.
+      // Añadir el ticket a la lista local inmediatamente sin necesidad de recargar,
+      // optimizando el uso de la API y mejorando la respuesta de la interfaz.
       setTickets((prev) => [newTicket, ...prev]);
 
       setCreateSuccess(true);

@@ -4,6 +4,7 @@ from slowapi.util import get_remote_address
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_current_user, get_db, get_current_admin_user
+from app.ws_manager import manager  # Singleton compartido de conexiones WebSocket
 from app.models.ticket import Ticket
 from app.models.user import User
 from app.schemas.ticket import TicketCreate, TicketRead
@@ -81,8 +82,8 @@ def create_ticket(
     """
     Crea un nuevo ticket de soporte para el usuario autenticado.
 
-    El usuario se obtiene automáticamente del JWT en la cookie, por lo que
-    no necesita enviar su ID en el cuerpo. El sistema lo asocia solo.
+    El identificador del usuario se extrae automáticamente del token JWT provisto en la cookie,
+    por lo que no es necesario incluirlo en el cuerpo de la petición.
 
     Rate limit: 10 tickets por minuto por usuario (identificado por user ID del JWT).
     Este límite previene que un usuario malintencionado inunde el sistema con tickets.
@@ -212,91 +213,131 @@ def get_all_tickets(
 
 
 @router.patch("/{ticket_id}/assign", response_model=TicketRead)
-def assign_ticket(
+async def assign_ticket(
     ticket_id: int,
     db: Session = Depends(get_db),
     admin_user: User = Depends(get_current_admin_user)
 ) -> TicketRead:
     """
-    Asigna un ticket a un técnico o administrador.
-    Cambia el status a 'in_progress' y genera una traza (mensaje automático)
-    que indica quién tomó el ticket.
-    
+    Asigna un ticket al técnico o administrador autenticado.
+
+    Cambia el status a 'in_progress', genera un mensaje de auditoría (is_system=True)
+    y notifica a todos los usuarios con el ticket abierto via WebSocket para que
+    actualicen su UI en tiempo real (ej: mostrar banner 'Ticket tomado por X').
+
+    Race Condition Protection (HTTP 409):
+        En escenarios de concurrencia donde múltiples técnicos intentan asignarse el mismo ticket simultáneamente,
+        la primera solicitud procesada será exitosa. Las solicitudes subsecuentes recibirán un error HTTP 409
+        (Conflict) para indicar que el ticket ya no se encuentra disponible. Esto previene la sobreescritura inadvertida.
+
     Args:
-        ticket_id: El ID del ticket pasado en la URL del request.
-        db: Sesión de BD.
-        admin_user: El usuario privilegiado que llamó al endpoint.
-        
+        ticket_id:  ID del ticket de la URL.
+        db:         Sesión de BD.
+        admin_user: El usuario privilegiado que realiza la asignación.
+
     Returns:
-        TicketRead: El ticket completamente procesado con los nuevos cambios.
+        TicketRead: El ticket actualizado con el nuevo técnico asignado.
+
+    Raises:
+        HTTPException(404): Si el ticket no existe.
+        HTTPException(409): Si el ticket ya está asignado a OTRO usuario
+                            (race condition — el estado cambió antes de que llegara el request).
     """
     ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
-        
+
+    # Idempotencia: si ya está asignado a mí mismo, retornar sin cambios
     if ticket.assigned_technician_id == admin_user.id:
-        # Ya está asignado a esta persona
         return ticket
 
-    # Modificamos la asignación y pasamos el estado a en-progreso
+    # Protección contra race condition: si ya está asignado a OTRA persona, rechazar
+    # HTTP 409 Conflict: el recurso cambió de estado antes de que llegara el request
+    if ticket.assigned_technician_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Este ticket ya fue tomado por otro técnico. Actualiza la página."
+        )
+
+    # Asignar y cambiar estado
     ticket.assigned_technician_id = admin_user.id
     if ticket.status == "open":
         ticket.status = "in_progress"
-        
-    # LOGICA DE TRAZABILIDAD INTELIGENTE
-    # Creamos un Message invisible para clientes 'comunes', pero indicará al UI 
-    # de administrador que este evento sucedió. Todo reside en tabla messages.
-    from app.models.message import Message # importación en línea para evitar circulares
+
+    # Mensaje de auditoría: visible para admins en el historial del chat
+    from app.models.message import Message  # Import local para evitar circulares
     system_msg = Message(
-        content=f"Ticket asignado a {admin_user.email} (ID: {admin_user.id})",
+        content=f"Ticket asignado a {admin_user.full_name or admin_user.email}",
         is_system=True,
         ticket_id=ticket.id,
-        author_id=admin_user.id
+        author_id=admin_user.id,
     )
     db.add(system_msg)
-    
     db.commit()
     db.refresh(ticket)
+
+    # Notificar a todos los conectados al ticket via WebSocket
+    # Esto actualiza la UI en tiempo real: el técnico no asignado verá el banner
+    await manager.broadcast(
+        {
+            "type": "ticket_assigned",
+            "assigned_to": {
+                "id": admin_user.id,
+                "email": admin_user.email,
+                "full_name": admin_user.full_name,
+            },
+        },
+        ticket_id=ticket_id,
+    )
+
     return ticket
 
 
 @router.patch("/{ticket_id}/unassign", response_model=TicketRead)
-def unassign_ticket(
+async def unassign_ticket(
     ticket_id: int,
     db: Session = Depends(get_db),
     admin_user: User = Depends(get_current_admin_user)
 ) -> TicketRead:
     """
-    Remueve la asignación técnica de un ticket, regresándolo a la "Bandeja".
-    Devuelve su estado a 'open'.
-    
+    Remueve la asignación técnica de un ticket, regresándolo a la bandeja pública.
+
+    Cambia el estado a 'open', genera un mensaje de auditoría y notifica via
+    WebSocket a todos los usuarios con el ticket abierto para que actualicen su UI.
+
     Args:
-        ticket_id: ID del ticket de la URL.
-        db: Sesión BD.
-        admin_user: El administrador llevando la operación.
-        
+        ticket_id:  ID del ticket de la URL.
+        db:         Sesión de BD.
+        admin_user: El técnico o admin que devuelve el ticket.
+
     Returns:
-        TicketRead: El ticket devuelto a estado general.
+        TicketRead: El ticket actualizado en estado 'open' sin técnico asignado.
+
+    Raises:
+        HTTPException(404): Si el ticket no existe.
     """
     ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
-        
+
     ticket.assigned_technician_id = None
     ticket.status = "open"
-    
-    # Creamos notificación de auditoría
+
+    # Mensaje de auditoría para el historial del chat
     from app.models.message import Message
     system_msg = Message(
-        content="El ticket ha sido desasignado y regresado a la bandeja.",
+        content=f"Ticket devuelto a la bandeja por {admin_user.full_name or admin_user.email}",
         is_system=True,
         ticket_id=ticket.id,
-        author_id=admin_user.id
+        author_id=admin_user.id,
     )
     db.add(system_msg)
-    
     db.commit()
     db.refresh(ticket)
+
+    # Notificar a todos los conectados que el ticket fue desasignado
+    await manager.broadcast({"type": "ticket_unassigned"}, ticket_id=ticket_id)
+
     return ticket
 
 
@@ -307,8 +348,8 @@ def get_ticket(
     current_user: User = Depends(get_current_user)
 ) -> TicketRead:
     """
-    Obtiene los detalles de un solo ticket. Si eres cliente, te restringe solo a los tuyos.
-    Si eres admin o técnico, puedes ver cualquiera.
+    Obtiene los detalles de un ticket específico. Los clientes (rol 3) están restringidos
+    a visualizar únicamente sus propios tickets. Los administradores y técnicos tienen acceso global.
     """
     ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
     if not ticket:

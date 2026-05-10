@@ -10,6 +10,7 @@ from app.core.config import settings
 from app.routers import login as login_router
 from app.routers import user as user_router
 from app.routers import ticket as ticket_router
+from app.routers import message as message_router
 
 # ---------------------------------------------------------------------------
 # Configuración del Rate Limiter Global
@@ -58,6 +59,7 @@ app.add_middleware(
 app.include_router(user_router.router)
 app.include_router(login_router.router)
 app.include_router(ticket_router.router)
+app.include_router(message_router.router)  # Endpoints de mensajes y WebSocket de chat
 
 
 # ---------------------------------------------------------------------------

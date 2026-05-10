@@ -21,6 +21,6 @@ class User(Base):
     
     # Relaciones
     role: Mapped["Role"] = relationship("Role", back_populates="users")
-    messages: Mapped[list["Message"]] = relationship("Message", back_populates="user")
+    messages: Mapped[list["Message"]] = relationship("Message", back_populates="author")
     tickets: Mapped[list["Ticket"]] = relationship("Ticket", foreign_keys="[Ticket.user_id]", back_populates="user")
     assigned_tickets: Mapped[list["Ticket"]] = relationship("Ticket", foreign_keys="[Ticket.assigned_technician_id]", back_populates="technician")

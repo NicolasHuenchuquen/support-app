@@ -9,22 +9,22 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from app.main import app
 
 
-# Instanciamos el cliente de pruebas de FastAPI
-# Esto levanta una versión virtual y ligera de tu API en memoria (sin usar el puerto 8000 real)
+# Instancia del cliente de pruebas de FastAPI
+# Levanta una versión virtual de la API en memoria para la ejecución de pruebas
 client = TestClient(app)
 
 def test_health_endpoint():
     """
-    Prueba unitaria básica: Verifica que el endpoint /health responde correctamente.
-    Este es el test ideal para que GitLab CI/CD verifique que la API no tiene errores de sintaxis críticos.
+    Prueba unitaria: Verifica que el endpoint /health responde correctamente.
+    Utilizada en CI/CD para asegurar que la API no contiene errores de sintaxis críticos.
     """
-    # 1. Hacemos la petición GET simulada al endpoint
+    # 1. Ejecución de petición GET al endpoint
     response = client.get("/health")
     
-    # 2. Verificamos que el código HTTP sea 200 (Éxito)
+    # 2. Verificación de código HTTP 200 (Éxito)
     assert response.status_code == 200
     
-    # 3. Verificamos que el JSON de respuesta contenga al menos el status esperado.
-    # Como "db_info" es dinámico, verificamos solo la llave "status"
+    # 3. Verificación del contenido del JSON de respuesta.
+    # Se evalúa únicamente la llave "status" dado que "db_info" es dinámico.
     assert response.json()["status"] == "ok"
     

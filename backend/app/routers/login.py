@@ -94,18 +94,29 @@ def login_for_access_token(
         data={"sub": str(user.id), "role": user.role_id}
     )
 
-    # En producción (Vercel → Render) la cookie necesita secure=True y samesite="none"
-    # para viajar entre dominios distintos. Localmente funciona con secure=False y samesite="lax".
+    # Atributos de la cookie según el entorno:
+    #
+    # PRODUCCIÓN (Vercel → Render, dominios distintos):
+    #   - secure=True: la cookie solo viaja por HTTPS (obligatorio con samesite=none)
+    #   - samesite="none": necesario para requests cross-site entre dominios distintos
+    #
+    # DESARROLLO LOCAL (localhost:3000 → localhost:8000):
+    #   - secure=False: http:// no es HTTPS, no podemos exigir Secure
+    #   - samesite="lax": suficiente para requests HTTP normales en localhost
+    #
+    # NOTA: samesite="none" sin secure=True es RECHAZADO por los navegadores modernos.
+    # Por eso NO usamos samesite="none" en local aunque resolvería el WebSocket cross-origin.
+    # El WebSocket en dev se maneja de otra forma (ver /ws/auth endpoint).
     is_production = settings.ENVIRONMENT == "production"
 
     response = Response(status_code=status.HTTP_200_OK)
     response.set_cookie(
         key="access_token",
         value=f"Bearer {access_token}",
-        httponly=True, # Bloquea el acceso desde JavaScript (protección XSS)
-        secure=is_production, # False para http://localhost. En producción debe ser True (HTTPS)
-        samesite="none" if is_production else "lax", # Previene ataques CSRF (Cross-Site Request Forgery)
-        max_age=1800, # 30 minutos (igual que el tiempo de vida del token)
+        httponly=True,                               # Bloquea acceso desde JavaScript (XSS)
+        secure=is_production,                        # True solo en HTTPS (producción)
+        samesite="none" if is_production else "lax", # none en prod (cross-site), lax en dev
+        max_age=1800,                                # 30 minutos de sesión
     )
     return response
 

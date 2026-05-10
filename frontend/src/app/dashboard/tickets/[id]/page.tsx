@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getTicketById, assignTicket, unassignTicket } from "@/services/ticketService";
+import { getTicketById } from "@/services/ticketService";
 import { getMe } from "@/services/userService";
 import type { TicketRead } from "@/types/ticket";
 import type { UserRead } from "@/types/user";
@@ -14,10 +14,8 @@ function getStatusLabel(status: string): string {
   return { open: "Abierto", in_progress: "En proceso", closed: "Cerrado" }[status] || status;
 }
 
-export default function AdminTicketDetail({ params }: { params: Promise<{ id: string }> }) {
+export default function ClientTicketDetail({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
-  // En Next.js 15, `params` es una Promise. React.use() la "desenvuelve"
-  // de forma segura y sincrona dentro del componente.
   const { id } = React.use(params);
   const ticketId = parseInt(id, 10);
 
@@ -26,19 +24,19 @@ export default function AdminTicketDetail({ params }: { params: Promise<{ id: st
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
     async function loadData() {
       try {
         const user = await getMe();
-        if (user.role_id === 3) {
-          router.push("/dashboard");
-          return;
-        }
         setCurrentUser(user);
 
         const data = await getTicketById(ticketId);
+        // Validar que el cliente solo vea su propio ticket
+        if (user.role_id === 3 && data.user_id !== user.id) {
+            router.push("/dashboard");
+            return;
+        }
         setTicket(data);
       } catch (err: any) {
         setError(err.message || "Error al cargar el ticket");
@@ -49,43 +47,16 @@ export default function AdminTicketDetail({ params }: { params: Promise<{ id: st
     loadData();
   }, [ticketId, router]);
 
-  const handleAssign = async () => {
-    setIsProcessing(true);
-    try {
-      const updatedTicket = await assignTicket(ticketId);
-      setTicket(updatedTicket);
-    } catch (err: any) {
-      alert(err.message);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleUnassign = async () => {
-    setIsProcessing(true);
-    try {
-      const updatedTicket = await unassignTicket(ticketId);
-      setTicket(updatedTicket);
-    } catch (err: any) {
-      alert(err.message);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
   if (loading) return <div className="p-8 text-white bg-slate-950 min-h-screen">Cargando detalles...</div>;
   if (error || !ticket || !currentUser) return <div className="p-8 bg-slate-950 min-h-screen text-red-400">Error: {error}</div>;
-
-  const isAssignedToMe = ticket.assigned_technician_id === currentUser?.id;
-  const isAssignedToOther = ticket.assigned_technician_id !== null && !isAssignedToMe;
 
   return (
     <div className="min-h-screen bg-slate-950 p-8">
       <div className="max-w-4xl mx-auto">
          
          {/* Navegación */}
-         <Link href="/dashboard/admin" className="text-indigo-400 hover:text-indigo-300 text-sm mb-6 inline-block">
-            ← Volver al Panel Admin
+         <Link href="/dashboard" className="text-indigo-400 hover:text-indigo-300 text-sm mb-6 inline-block">
+            ← Volver a Mis Tickets
          </Link>
          
          <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 mb-6">
@@ -96,24 +67,6 @@ export default function AdminTicketDetail({ params }: { params: Promise<{ id: st
                  <span className="inline-block mt-3 px-3 py-1 bg-indigo-500/20 text-indigo-300 text-xs rounded-full border border-indigo-500/30">
                    Estado: {getStatusLabel(ticket.status)}
                  </span>
-               </div>
-               
-               {/* Controles de Asignación */}
-               <div className="flex flex-col items-end">
-                   {isAssignedToMe ? (
-                       <button onClick={handleUnassign} disabled={isProcessing} className="bg-red-500/20 text-red-400 border border-red-500/50 hover:bg-red-500/30 px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50">
-                          {isProcessing ? "Procesando..." : "Devolver Ticket"}
-                       </button>
-                   ) : isAssignedToOther ? (
-                       <div className="text-yellow-500 bg-yellow-500/10 border border-yellow-500/20 px-4 py-2 rounded-lg text-sm">
-                          Asignado a ID: {ticket.assigned_technician_id}
-                          {/* Opcional: El admin podría "robar" el asignamiento usando el mismo router, pero dejémoslo informativo */}
-                       </div>
-                   ) : (
-                       <button onClick={handleAssign} disabled={isProcessing} className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50">
-                          {isProcessing ? "Procesando..." : "Asignarme Ticket"}
-                       </button>
-                   )}
                </div>
             </div>
 

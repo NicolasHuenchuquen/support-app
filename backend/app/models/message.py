@@ -34,5 +34,5 @@ class Message(Base):
 
     # Relaciones
     ticket: Mapped["Ticket"] = relationship("Ticket", back_populates="messages")
-    user: Mapped["User"] = relationship("User", back_populates="messages")
+    author: Mapped["User"] = relationship("User", back_populates="messages")
 
